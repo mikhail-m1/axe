@@ -14,6 +14,7 @@ use clap::{parser::ValueSource, Args, Parser, Subcommand};
 mod groups;
 mod log;
 mod streams;
+mod ui;
 mod utils;
 
 #[::tokio::main]
@@ -221,9 +222,6 @@ struct LogArgs {
     /// either length or end is used, the format is same as offset for start
     #[arg(short, long, default_value = None)]
     length: Option<String>,
-    /// number records in a chunk, maximum is 10k
-    #[arg(long, default_value_t = 1000)]
-    chunk_size: u16,
     /// AWS CloudWatch filter https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html
     /// Examples:
     /// * 'A B' - the log has to contain A and B
@@ -241,4 +239,10 @@ struct LogArgs {
     /// ouput datetime format https://docs.rs/chrono/latest/chrono/format/strftime/index.html
     #[arg[short, long, default_value_t = String::from("%d%b %H:%M:%S%.3f|")]]
     datetime_format: String,
+    /// show results in UI
+    #[arg(short, long, default_value_t = false)]
+    ui: bool,
+    /// number records in a chunk, maximum is 10k
+    #[arg(long, default_value_t = 1000)]
+    chunk_size: u16,
 }

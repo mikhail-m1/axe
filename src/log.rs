@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
 use crate::utils::{local_time, OptFuture};
-use crate::LogArgs;
+use crate::{ui, LogArgs};
 
 use anyhow::{Context, Result};
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
@@ -17,7 +17,7 @@ use toml_edit::DocumentMut;
 
 pub async fn print(
     client: &cloudwatchlogs::Client,
-    log_args: &LogArgs,
+    args: &LogArgs,
     arg_matches: &ArgMatches,
     config: &DocumentMut,
 ) -> Result<()> {
@@ -27,17 +27,17 @@ pub async fn print(
     {
         config.get("datetime_format").unwrap().as_str().unwrap()
     } else {
-        &log_args.datetime_format
+        &args.datetime_format
     };
 
     let unix_now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .context("cannot get unix time as duration")?;
-    let start = parse_offset_or_duration(&log_args.start, &unix_now)?;
+    let start = parse_offset_or_duration(&args.start, &unix_now)?;
     // TODO: add check for end and length at the same time
-    let end = if let Some(end) = &log_args.end {
+    let end = if let Some(end) = &args.end {
         parse_offset_or_duration(end, &unix_now)?
-    } else if let Some(length) = &log_args.length {
+    } else if let Some(length) = &args.length {
         start
             + duration_str::parse(length)
                 .with_context(|| format!("cannot parse `{length}` as duration"))?
@@ -46,7 +46,7 @@ pub async fn print(
         unix_now.as_millis() as i64
     };
 
-    let message_regexp = log_args
+    let message_regexp = args
         .message_regexp
         .as_ref()
         .map(|v| RegexWithReplace::new(v.as_str()).unwrap());
@@ -56,33 +56,46 @@ pub async fn print(
         local_time(start),
         local_time(end)
     );
-    if let Some(filter) = &log_args.filter {
-        print_filter_events(client, log_args, start, end, filter, &|t, m| {
-            print_event(t, m, &message_regexp, datetime_format)
-        })
-        .await
+
+    let mut lines = vec![];
+    let mut collector = |t: Option<i64>, m: Option<String>| {
+        if args.ui {
+            lines.push((
+                format!("{}", local_time(t.unwrap_or(0)).format(datetime_format)),
+                m.unwrap_or_default(),
+            ))
+        } else {
+            print_event(&t, &m, &message_regexp, datetime_format)
+        }
+    };
+
+    if let Some(filter) = &args.filter {
+        print_filter_events(client, args, start, end, filter, &mut collector).await
     } else {
-        print_all_events(client, log_args, start, end, &|t, m| {
-            print_event(t, m, &message_regexp, datetime_format)
-        })
-        .await
+        print_all_events(client, args, start, end, &mut collector).await
+    }?;
+
+    if args.ui && !lines.is_empty() {
+        ui::run(lines)
+    } else {
+        Ok(())
     }
 }
 
 async fn print_all_events<ConsumerFn>(
     client: &cloudwatchlogs::Client,
-    log_args: &LogArgs,
+    args: &LogArgs,
     start: i64,
     end: i64,
-    consumer: &ConsumerFn,
+    consumer: &mut ConsumerFn,
 ) -> Result<()>
 where
-    ConsumerFn: for<'a> Fn(&'a Option<i64>, &'a Option<String>),
+    ConsumerFn: FnMut(Option<i64>, Option<String>),
 {
     let template = GetLogEventsInputBuilder::default()
-        .log_group_name(&log_args.group)
-        .log_stream_name(&log_args.stream)
-        .limit(log_args.chunk_size as i32)
+        .log_group_name(&args.group)
+        .log_stream_name(&args.stream)
+        .limit(args.chunk_size as i32)
         .start_from_head(true)
         .start_time(start)
         .end_time(end);
@@ -94,8 +107,8 @@ where
             if events.is_empty() {
                 break;
             }
-            for event in &events {
-                consumer(&event.timestamp, &event.message);
+            for event in events.into_iter() {
+                consumer(event.timestamp, event.message);
             }
         } else {
             break;
@@ -111,32 +124,32 @@ where
 
 async fn print_filter_events<ConsumerFn>(
     client: &cloudwatchlogs::Client,
-    log_args: &LogArgs,
+    args: &LogArgs,
     start: i64,
     end: i64,
     filter: &str,
-    consumer: &ConsumerFn,
+    consumer: &mut ConsumerFn,
 ) -> Result<()>
 where
-    ConsumerFn: for<'a> Fn(&'a Option<i64>, &'a Option<String>),
+    ConsumerFn: FnMut(Option<i64>, Option<String>),
 {
     let template = FilterLogEventsInputBuilder::default()
-        .log_group_name(&log_args.group)
-        .log_stream_names(&log_args.stream)
-        .limit(log_args.chunk_size as i32)
+        .log_group_name(&args.group)
+        .log_stream_names(&args.stream)
+        .limit(args.chunk_size as i32)
         .start_time(start)
         .end_time(end)
         .filter_pattern(filter);
 
     let mut opt_res = Some(template.clone().send_with(client).await);
     while let Some(res) = opt_res {
-        let output = res.context("contaext")?;
+        let output = res.context("filter log events failed")?;
         if let Some(events) = output.events {
             if events.is_empty() {
                 break;
             }
-            for event in &events {
-                consumer(&event.timestamp, &event.message);
+            for event in events.into_iter() {
+                consumer(event.timestamp, event.message);
             }
         } else {
             break;
