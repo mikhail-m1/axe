@@ -237,7 +237,7 @@ struct LogArgs {
     #[arg(short='r', long, verbatim_doc_comment, default_value = None)]
     message_regexp: Option<String>,
     /// ouput datetime format https://docs.rs/chrono/latest/chrono/format/strftime/index.html
-    #[arg[short, long, default_value_t = String::from("%d%b %H:%M:%S%.3f|")]]
+    #[arg[short, long, default_value_t = String::from("%d%b %H:%M:%S%.3f")]]
     datetime_format: String,
     /// show results in UI
     #[arg(short, long, default_value_t = false)]

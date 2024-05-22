@@ -58,21 +58,28 @@ pub async fn print(
     );
 
     let mut lines = vec![];
-    let mut collector = |t: Option<i64>, m: Option<String>| {
+    let mut consumer = |t: Option<i64>, m: Option<String>| {
+        let m = if let Some(re) = &message_regexp {
+            re.re
+                .replace(&m.unwrap_or_default(), re.replacement)
+                .to_string()
+        } else {
+            m.unwrap_or_default()
+        };
         if args.ui {
             lines.push((
                 format!("{}", local_time(t.unwrap_or(0)).format(datetime_format)),
-                m.unwrap_or_default(),
+                m,
             ))
         } else {
-            print_event(&t, &m, &message_regexp, datetime_format)
+            print_event(&t, &m, datetime_format)
         }
     };
 
     if let Some(filter) = &args.filter {
-        print_filter_events(client, args, start, end, filter, &mut collector).await
+        print_filter_events(client, args, start, end, filter, &mut consumer).await
     } else {
-        print_all_events(client, args, start, end, &mut collector).await
+        print_all_events(client, args, start, end, &mut consumer).await
     }?;
 
     if args.ui && !lines.is_empty() {
@@ -163,22 +170,9 @@ where
     Ok(())
 }
 
-fn print_event(
-    timestamp: &Option<i64>,
-    message: &Option<String>,
-    re: &Option<RegexWithReplace>,
-    datetime_format: &str,
-) {
+fn print_event(timestamp: &Option<i64>, message: &str, datetime_format: &str) {
     let datetime = local_time(timestamp.unwrap_or(0)).format(datetime_format);
-    if let Some(re) = re {
-        let new = re.re.replace(message.as_ref().unwrap(), re.replacement);
-        println!("{datetime} {new}");
-    } else {
-        println!(
-            "{datetime}{}",
-            message.as_ref().map(|s| s.as_str()).unwrap_or("")
-        )
-    }
+    println!("{datetime}|{}", message)
 }
 
 fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
@@ -267,11 +261,5 @@ mod test {
         assert!(parse_offset_or_duration("10:23", &ts).is_ok());
         assert!(parse_offset_or_duration("10:23:45", &ts).is_ok());
         assert!(parse_offset_or_duration("10:23:45.678", &ts).is_ok());
-    }
-
-    #[test]
-    fn x() {
-        let r = Regex::new("^([^|]+\\|){7}").unwrap();
-        println!("`{}`", r.replace(" some log me  | | | | | | |  ssage", "*"));
     }
 }
