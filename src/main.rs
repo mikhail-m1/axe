@@ -21,7 +21,7 @@ mod utils;
 async fn main() -> Result<()> {
     let mut args = Cli::parse();
     let mut arg_matches = <Cli as clap::CommandFactory>::command().get_matches();
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("axe=debug")).init();
+    env_logger::Builder::from_env(env_logger::Env::default()).init();
     let mut config = read_config(
         &args,
         arg_matches.value_source("config_path") == Some(ValueSource::CommandLine),
