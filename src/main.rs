@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
                 return log::print(
                     &client,
                     log_args,
-                    &arg_matches.subcommand().unwrap().1,
+                    arg_matches.subcommand().unwrap().1,
                     &config,
                 )
                 .await;

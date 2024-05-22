@@ -176,7 +176,7 @@ fn print_event(timestamp: &Option<i64>, message: &str, datetime_format: &str) {
 }
 
 fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
-    Ok(duration_str::parse(value)
+    duration_str::parse(value)
         .map(|o| unix_now.saturating_sub(o).as_millis() as i64)
         .or_else(|_| {
             NaiveTime::parse_from_str(value, "%H:%M")
@@ -220,9 +220,7 @@ fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
                 })
         })
         .or_else(|_| DateTime::parse_from_rfc3339(value).map(|d| d.timestamp_millis()))
-        .with_context(|| {
-            format!("failed to parse {value} as duratio, time, UTC time or RFC3339")
-        })?)
+        .with_context(|| format!("failed to parse {value} as duratio, time, UTC time or RFC3339"))
 }
 
 struct RegexWithReplace<'a> {
