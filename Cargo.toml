@@ -23,6 +23,7 @@ anyhow = "1.0"
 toml_edit = "0.22"
 regex = "1.10"
 shellexpand = { version = "3.1", features = ["path"] } 
+itertools = "0.13"
 
 egui = { version = "0.27", optional = true }
 egui_extras = { version = "0.27", optional = true }

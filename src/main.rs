@@ -10,10 +10,12 @@ use ::log::debug;
 use anyhow::{Context, Result};
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use clap::{parser::ValueSource, Args, Parser, Subcommand};
+use itertools::Itertools;
 
 mod groups;
 mod log;
 mod streams;
+#[cfg(feature = "ui")]
 mod ui;
 mod utils;
 
@@ -81,6 +83,27 @@ async fn main() -> Result<()> {
                     config.to_string(),
                 )
                 .with_context(|| format!("writing config to {:?}", args.config_path))?;
+                return Ok(());
+            }
+            Commands::Aliases => {
+                for (key, value) in config
+                    .get_key_value_mut("alias")
+                    .and_then(|i| i.1.as_table())
+                    .map(|t| t.get_values())
+                    .into_iter()
+                    .flat_map(|t| t)
+                {
+                    println!(
+                        "{}\t\"{}\"",
+                        key[0].get(),
+                        value
+                            .as_array()
+                            .expect("array as value for alias")
+                            .iter()
+                            .map(|v| v.as_str().unwrap())
+                            .join("\" \"")
+                    );
+                }
                 return Ok(());
             }
             Commands::External(v) => {
@@ -191,6 +214,8 @@ enum Commands {
     },
     /// add or rewrite alias, use with with -- after alias to pass args
     Alias { params: Vec<String> },
+    /// print all aliases
+    Aliases,
     #[command(external_subcommand)]
     External(Vec<String>),
 }
@@ -239,9 +264,12 @@ struct LogArgs {
     /// ouput datetime format https://docs.rs/chrono/latest/chrono/format/strftime/index.html
     #[arg[short, long, default_value_t = String::from("%d%b %H:%M:%S%.3f")]]
     datetime_format: String,
+
+    #[cfg(feature = "ui")]
     /// show results in UI
     #[arg(short, long, default_value_t = false)]
     ui: bool,
+
     /// number records in a chunk, maximum is 10k
     #[arg(long, default_value_t = 1000)]
     chunk_size: u16,

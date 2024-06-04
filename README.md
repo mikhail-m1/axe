@@ -22,6 +22,7 @@ The easiest option is to install [cargo through rustup](https://rustup.rs/) and 
   groups   show log groups
   streams  show log group streams
   alias    add or rewrite alias, use with with -- after alias to pass args
+  aliases  print all aliases
   help     Print this message or the help of the given subcommand(s)
 ```
 ### Log
@@ -49,8 +50,6 @@ Options:
           end time, format is the same as for start
   -l, --length <LENGTH>
           either length or end is used, the format is same as offset for start
-      --chunk-size <CHUNK_SIZE>
-          number records in a chunk, maximum is 10k [default: 1000]
   -f, --filter <FILTER>
           AWS CloudWatch filter https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/FilterAndPatternSyntax.html
           Examples:
@@ -64,12 +63,27 @@ Options:
           '<delimiter char><regexp><the same delimiter char><replacement>'
           example: '/(\d{4} [^|]+/$1'
   -d, --datetime-format <DATETIME_FORMAT>
-          ouput datetime format https://docs.rs/chrono/latest/chrono/format/strftime/index.html [default: "%d%b %H:%M:%S%.3f|"]
+          ouput datetime format https://docs.rs/chrono/latest/chrono/format/strftime/index.html [default: "%d%b %H:%M:%S%.3f"]
+  -u, --ui
+          show results in UI
+      --chunk-size <CHUNK_SIZE>
+          number records in a chunk, maximum is 10k [default: 1000]
 ```
 ### Alias
 When you want to save your command just create an alias the next way.
 For `cw-axe -p my-profile log my-group my-setream -r '#^2024#24'` insert `alias <name> --` after `cw-axe`: `cw-axe alias my-alias --  -p my-profile log my-group my-setream -r '#^2024#24`.
 And now you can just use `cw-axe my-alias`.
 
+## Supported platforms
+* Linux,
+* macOS,
+* Should work on other Unix-like systems.
+
+It might work on Windows as well, but config is in the common Unix like directory, so it might requre some minor changes.
+
 ## Known bugs:
 * AWS CloudWatch filter is not always working correctly, sometimes it misses some commands, but it's on the AWS side, so no way to fix it except get all events and grep.
+
+## UI
+
+ Results can be shown in the UI ([egui](https://github.com/emilk/egui)), if the `ui` feature is enabled. But currently it's limited to the current query results only. I have plans to implement a fully functional UI one day.

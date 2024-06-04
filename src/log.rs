@@ -1,7 +1,9 @@
 use std::time::{Duration, SystemTime};
 
+#[cfg(feature = "ui")]
+use crate::ui;
 use crate::utils::{local_time, OptFuture};
-use crate::{ui, LogArgs};
+use crate::LogArgs;
 
 use anyhow::{Context, Result};
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
@@ -57,6 +59,7 @@ pub async fn print(
         local_time(end)
     );
 
+    #[cfg(feature = "ui")]
     let mut lines = vec![];
     let mut consumer = |t: Option<i64>, m: Option<String>| {
         let m = if let Some(re) = &message_regexp {
@@ -66,6 +69,8 @@ pub async fn print(
         } else {
             m.unwrap_or_default()
         };
+
+        #[cfg(feature = "ui")]
         if args.ui {
             lines.push((
                 format!("{}", local_time(t.unwrap_or(0)).format(datetime_format)),
@@ -74,6 +79,8 @@ pub async fn print(
         } else {
             print_event(&t, &m, datetime_format)
         }
+        #[cfg(not(feature = "ui"))]
+        print_event(&t, &m, datetime_format)
     };
 
     if let Some(filter) = &args.filter {
@@ -82,11 +89,14 @@ pub async fn print(
         print_all_events(client, args, start, end, &mut consumer).await
     }?;
 
+    #[cfg(feature = "ui")]
     if args.ui && !lines.is_empty() {
         ui::run(lines)
     } else {
         Ok(())
     }
+    #[cfg(not(feature = "ui"))]
+    Ok(())
 }
 
 async fn print_all_events<ConsumerFn>(
@@ -220,7 +230,9 @@ fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
                 })
         })
         .or_else(|_| DateTime::parse_from_rfc3339(value).map(|d| d.timestamp_millis()))
-        .with_context(|| format!("failed to parse {value} as duratio, time, UTC time or RFC3339"))
+        .with_context(|| {
+            format!("failed to parse `{value}` as duration, time, UTC time or RFC3339")
+        })
 }
 
 struct RegexWithReplace<'a> {
