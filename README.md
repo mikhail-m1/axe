@@ -1,4 +1,4 @@
-# AWS CloudWatch log CLI viewer
+# AWS CloudWatch log CLI viewer [![Latest version](https://img.shields.io/crates/v/cw-axe.svg)](https://crates.io/crates/cw-axe/)
 Axe is another tool to get logs from AWS CloudWatch.
 
 ## Features
