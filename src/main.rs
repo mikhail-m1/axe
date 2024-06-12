@@ -30,25 +30,35 @@ async fn main() -> Result<()> {
     )?;
 
     loop {
-        let client = create_client(&args).await;
-        match args.command {
+        let Cli {
+            profile, command, ..
+        } = args;
+        match command {
             Commands::Groups {
                 verbose,
                 pattern,
                 streams,
             } => {
-                return groups::print(&client, pattern, streams, verbose).await;
+                return groups::print(&create_client(&profile).await, pattern, streams, verbose)
+                    .await;
             }
             Commands::Streams {
                 group,
                 verbose,
                 prefix,
             } => {
-                return streams::print(&client, group, prefix, verbose, false).await;
+                return streams::print(
+                    &create_client(&profile).await,
+                    group,
+                    prefix,
+                    verbose,
+                    false,
+                )
+                .await;
             }
             Commands::Log(ref log_args) => {
                 return log::print(
-                    &client,
+                    &create_client(&profile).await,
                     log_args,
                     arg_matches.subcommand().unwrap().1,
                     &config,
@@ -161,9 +171,9 @@ fn read_config(args: &Cli, fail_on_not_found: bool) -> Result<toml_edit::Documen
     }
 }
 
-async fn create_client(cli: &Cli) -> cloudwatchlogs::Client {
+async fn create_client(profile: &Option<String>) -> cloudwatchlogs::Client {
     let mut loader = aws_config::from_env();
-    if let Some(profile) = cli.profile.as_ref() {
+    if let Some(profile) = profile.as_ref() {
         debug!("Use {profile} profile");
         loader = loader.profile_name(profile);
     }
