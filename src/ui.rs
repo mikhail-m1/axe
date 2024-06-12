@@ -4,11 +4,12 @@ use egui_extras::Column;
 
 pub fn run(lines: Lines) -> Result<()> {
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_min_inner_size([600.0, 400.0]),
-        //.with_icon(
-        //    eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
-        //        .expect("Failed to load icon"),
-        //),
+        viewport: egui::ViewportBuilder::default()
+            .with_min_inner_size([600.0, 400.0])
+            .with_icon(
+                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
+                    .expect("Failed to load icon"),
+            ),
         ..Default::default()
     };
 
