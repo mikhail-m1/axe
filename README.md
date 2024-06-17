@@ -13,7 +13,7 @@ The easiest option is to install [cargo through rustup](https://rustup.rs/) and 
 ## Usage
 ### Global options
 ```
- -p, --prodile AWS profile
+ -p, --profile AWS profile
  -c, --config-path <CONFIG_PATH>
 ```
 ### Commands
