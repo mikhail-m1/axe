@@ -109,6 +109,6 @@ It might work on Windows as well, but config is in the common Unix-like director
 
 ## UI
 
-Results can be shown in the UI ([egui](https://github.com/emilk/egui)), if the `ui` feature is enabled. Currently, it's limited to the current query results only. I have plans to implement a fully functional UI one day.
+Results can be shown in the UI (made with [egui](https://github.com/emilk/egui)), if the `ui` feature is enabled (enabled by default).
 
-To install with the UI feature enabled, run `cargo install cw-axe --features ui`.
+Currently, it's limited to the current query results only. I have plans to implement a fully functional UI one day.
