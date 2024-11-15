@@ -2,7 +2,7 @@
 name = "cw-axe"
 authors = ["Mikhail Modin <mikhailm1@gmail.com>"]
 description = "AWS CloudWatch CLI log viewer"
-version = "0.2.0"
+version = "0.2.1"
 homepage = "https://github.com/mikhail-m1/axe"
 repository = "https://github.com/mikhail-m1/axe"
 license = "GPL-3.0"

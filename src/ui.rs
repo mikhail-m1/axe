@@ -1,5 +1,5 @@
 use anyhow::Result;
-use egui::{Label, Widget};
+use egui::{FontFamily, Label, RichText, Widget};
 use egui_extras::Column;
 
 pub fn run(lines: Lines) -> Result<()> {
@@ -59,10 +59,18 @@ impl eframe::App for Log {
                     body.rows(20., self.lines.len(), |mut row| {
                         let index = row.index();
                         row.col(|ui| {
-                            Label::new(&self.lines[index].0).wrap(false).ui(ui);
+                            Label::new(
+                                RichText::new(&self.lines[index].0).family(FontFamily::Monospace),
+                            )
+                            .wrap(false)
+                            .ui(ui);
                         });
                         row.col(|ui| {
-                            Label::new(&self.lines[index].1).truncate(true).ui(ui);
+                            Label::new(
+                                RichText::new(&self.lines[index].1).family(FontFamily::Monospace),
+                            )
+                            .truncate(true)
+                            .ui(ui);
                         });
                         if row.response().clicked() {
                             // TODO show window
