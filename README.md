@@ -15,7 +15,11 @@ The easiest option is to install [cargo through rustup](https://rustup.rs/) and 
 
 Run `cw-axe -h` to see all options.
 
-Run `cw-axe log /aws/log/group/name log-stream/name/a41c1f8614ae47e2a2dc58c8cee29b20` to view a log screen in the terminal.
+Run `cw-axe log /aws/log/group/name log-stream/name` to view a log screen in the terminal.
+
+If you want to see all available log groups for your profile run `cw-axe groups` and `cw-axe streams` for streams. 
+
+If you don't have AWS_PROFILE environment variable set, you can use `-p <profile name>`.
 
 ### Global options
 
@@ -82,7 +86,7 @@ Options:
 ```
 ### Alias
 
-`cw-axe` supports creating saved aliases to re-run command commands.
+`cw-axe` supports creating saved aliases to re-run commands.
 
 For example:
 
