@@ -2,21 +2,34 @@
 Axe is another tool to get logs from AWS CloudWatch.
 
 ## Features
+
 * multiple ways to define datetime range,
 * build-in regex support,
-* aliases support.
+* command alias support.
 
 ## Installation
 
 The easiest option is to install [cargo through rustup](https://rustup.rs/) and then run `cargo install cw-axe`.
 
 ## Usage
+
+Run `cw-axe -h` to see all options.
+
+Run `cw-axe log /aws/log/group/name log-stream/name` to view a log screen in the terminal.
+
+If you want to see all available log groups for your profile run `cw-axe groups` and `cw-axe streams` for streams. 
+
+If you don't have AWS_PROFILE environment variable set, you can use `-p <profile name>`.
+
 ### Global options
+
 ```
  -p, --profile AWS profile
  -c, --config-path <CONFIG_PATH>
 ```
+
 ### Commands
+
 ```
   log      show logs
   groups   show log groups
@@ -25,7 +38,9 @@ The easiest option is to install [cargo through rustup](https://rustup.rs/) and 
   aliases  print all aliases
   help     Print this message or the help of the given subcommand(s)
 ```
+
 ### Log
+
 ```
 Arguments:
   <GROUP>   group name
@@ -70,20 +85,34 @@ Options:
           number records in a chunk, maximum is 10k [default: 1000]
 ```
 ### Alias
-When you want to save your command just create an alias the next way.
-For `cw-axe -p my-profile log my-group my-setream -r '#^2024#24'` insert `alias <name> --` after `cw-axe`: `cw-axe alias my-alias --  -p my-profile log my-group my-setream -r '#^2024#24`.
-And now you can just use `cw-axe my-alias`.
+
+`cw-axe` supports creating saved aliases to re-run commands.
+
+For example:
+
+```bash
+# This is the command you want to re-run:
+cw-axe -p my-profile log my-group my-stream -r '#^2024#24'
+
+# Create the alias by adding `alias <name> --`:
+cw-axe alias my-alias --  -p my-profile log my-group my-stream -r '#^2024#24
+
+# Now, you can use the alias:
+cw-axe my-alias
+```
 
 ## Supported platforms
 * Linux,
 * macOS,
 * Should work on other Unix-like systems.
 
-It might work on Windows as well, but config is in the common Unix like directory, so it might requre some minor changes.
+It might work on Windows as well, but config is in the common Unix-like directory, so it might require some minor changes.
 
 ## Known bugs:
-* AWS CloudWatch filter is not always working correctly, sometimes it misses some commands, but it's on the AWS side, so no way to fix it except get all events and grep.
+* AWS CloudWatch filter does not always work correctly. Sometimes it misses some commands, but it's on the AWS side, so there's no way to fix it except get all events and grep.
 
 ## UI
 
- Results can be shown in the UI ([egui](https://github.com/emilk/egui)), if the `ui` feature is enabled. But currently it's limited to the current query results only. I have plans to implement a fully functional UI one day.
+Results can be shown in the UI (made with [egui](https://github.com/emilk/egui)), if the `ui` feature is enabled (enabled by default).
+
+Currently, it's limited to the current query results only. I have plans to implement a fully functional UI one day.
