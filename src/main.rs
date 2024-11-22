@@ -248,6 +248,9 @@ struct LogArgs {
     ///     * 12:34
     /// * UTC time of day, ex:
     ///     * 12:34Z
+    /// * Unix epoch time in seconds or milliseconds
+    ///     * 1700000000
+    ///     * 1700000000000
     /// *
     #[arg(short, long, verbatim_doc_comment, default_value_os_t = String::from("60m"))]
     start: String,

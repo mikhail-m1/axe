@@ -186,8 +186,10 @@ fn print_event(timestamp: &Option<i64>, message: &str, datetime_format: &str) {
 }
 
 fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
-    duration_str::parse(value)
-        .map(|o| unix_now.saturating_sub(o).as_millis() as i64)
+    parse_as_epoch_ms(value)
+        .or_else(|_| {
+            duration_str::parse(value).map(|o| unix_now.saturating_sub(o).as_millis() as i64)
+        })
         .or_else(|_| {
             NaiveTime::parse_from_str(value, "%H:%M")
                 .or_else(|_| NaiveTime::parse_from_str(value, "%H:%M:%S"))
@@ -235,6 +237,16 @@ fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
         })
 }
 
+fn parse_as_epoch_ms(candidate: &str) -> anyhow::Result<i64> {
+    let ms = candidate.parse::<i64>()?;
+    if ms > 946684800000 {
+        // 2000-01-01 in ms
+        Ok(ms)
+    } else {
+        Ok(ms * 1000)
+    }
+}
+
 struct RegexWithReplace<'a> {
     re: Regex,
     replacement: &'a str,
@@ -266,10 +278,19 @@ mod test {
                 .unwrap()
                 .timestamp() as u64,
         );
-        // TODO: think thow to write proper test, maybe change local time zone or just copy implementation logic
+        // TODO: write proper test, maybe change local time zone or just copy implementation logic
         // TODO: cover other cases
         assert!(parse_offset_or_duration("10:23", &ts).is_ok());
         assert!(parse_offset_or_duration("10:23:45", &ts).is_ok());
         assert!(parse_offset_or_duration("10:23:45.678", &ts).is_ok());
+
+        assert_eq!(
+            parse_offset_or_duration("1700000000", &ts).unwrap(),
+            1700000000000
+        );
+        assert_eq!(
+            parse_offset_or_duration("1700000000000", &ts).unwrap(),
+            1700000000000
+        );
     }
 }
