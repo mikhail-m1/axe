@@ -101,7 +101,7 @@ async fn main() -> Result<()> {
                     .and_then(|i| i.1.as_table())
                     .map(|t| t.get_values())
                     .into_iter()
-                    .flat_map(|t| t)
+                    .flatten()
                 {
                     println!(
                         "{}\t\"{}\"",
