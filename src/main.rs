@@ -66,6 +66,11 @@ async fn main() -> Result<()> {
                 .await;
             }
             Commands::Alias { params } => {
+                if params.is_empty() {
+                    return Err(anyhow::format_err!(
+                        "parameters are required, use -h for help"
+                    ));
+                }
                 if !config.contains_table("alias") {
                     config.insert("alias", toml_edit::table());
                 }
@@ -223,7 +228,18 @@ enum Commands {
         prefix: Option<String>,
     },
     /// add or rewrite alias, use with with -- after alias to pass args
-    Alias { params: Vec<String> },
+    Alias {
+        /// Use: <alias name> -- args you want to save as the alias
+        /// for example:
+        /// # This is the command you want to re-run often:
+        /// cw-axe -p my-profile log my-group my-stream
+        /// # Create the alias by adding `alias <name> --`:
+        /// cw-axe alias my-alias --  -p my-profile log my-group my-stream
+        /// # Now, you can use the alias:
+        /// cw-axe my-alias
+        #[arg(verbatim_doc_comment)]
+        params: Vec<String>,
+    },
     /// print all aliases
     Aliases,
     #[command(external_subcommand)]
