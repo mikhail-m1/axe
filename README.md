@@ -60,6 +60,9 @@ Options:
               * 12:34
           * UTC time of day, ex:
               * 12:34Z
+          * Unix epoch time in seconds or milliseconds, ex:
+              * 1700000000
+              * 1700000000000
           * [default: 60m]
   -e, --end <END>
           end time, format is the same as for start
