@@ -13,6 +13,8 @@ use clap::{parser::ValueSource, Args, Parser, Subcommand};
 use itertools::Itertools;
 
 mod groups;
+mod live_tail_client;
+mod live_tail_parser;
 mod log;
 mod streams;
 #[cfg(feature = "ui")]
@@ -39,7 +41,7 @@ async fn main() -> Result<()> {
                 pattern,
                 streams,
             } => {
-                return groups::print(&create_client(&profile).await, pattern, streams, verbose)
+                return groups::print(&create_client(&profile).await.1, pattern, streams, verbose)
                     .await;
             }
             Commands::Streams {
@@ -48,7 +50,7 @@ async fn main() -> Result<()> {
                 prefix,
             } => {
                 return streams::print(
-                    &create_client(&profile).await,
+                    &create_client(&profile).await.1,
                     group,
                     prefix,
                     verbose,
@@ -57,8 +59,10 @@ async fn main() -> Result<()> {
                 .await;
             }
             Commands::Log(ref log_args) => {
+                let (aws_config, client) = &create_client(&profile).await;
                 return log::print(
-                    &create_client(&profile).await,
+                    aws_config,
+                    client,
                     log_args,
                     arg_matches.subcommand().unwrap().1,
                     &config,
@@ -176,14 +180,21 @@ fn read_config(args: &Cli, fail_on_not_found: bool) -> Result<toml_edit::Documen
     }
 }
 
-async fn create_client(profile: &Option<String>) -> cloudwatchlogs::Client {
-    let mut loader = aws_config::from_env();
-    if let Some(profile) = profile.as_ref() {
-        debug!("Use {profile} profile");
-        loader = loader.profile_name(profile);
-    }
+async fn create_client(
+    profile: &Option<String>,
+) -> (aws_config::SdkConfig, cloudwatchlogs::Client) {
+    let loader = aws_config::defaults(aws_config::BehaviorVersion::v2024_03_28())
+        .app_name(aws_config::AppName::new("aws-axe").expect("name is valid"));
+
+    let loader = if let Some(profile) = profile.as_ref() {
+        loader.profile_name(profile)
+    } else {
+        loader
+    };
+
     let config = loader.load().await;
-    aws_sdk_cloudwatchlogs::Client::new(&config)
+    let cleint = aws_sdk_cloudwatchlogs::Client::new(&config);
+    (config, cleint)
 }
 
 #[derive(Parser, Debug)]
@@ -251,6 +262,9 @@ struct LogArgs {
     group: String,
     /// stream name
     stream: String,
+    /// prints live log. Start, end, length and ui options are not supported.
+    #[arg(short, long, default_value_t = false)]
+    tail: bool,
     /// start time, the time can be defines as
     /// * RFC 3339, ex:
     ///     * 2024-01-02T03:04:05.678Z

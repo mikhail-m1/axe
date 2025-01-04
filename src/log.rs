@@ -3,10 +3,12 @@ use std::time::{Duration, SystemTime};
 #[cfg(feature = "ui")]
 use crate::ui;
 use crate::utils::{local_time, OptFuture};
-use crate::LogArgs;
+use crate::{live_tail_client, LogArgs};
 
 use anyhow::{Context, Result};
+use aws_credential_types::provider::ProvideCredentials;
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
+use aws_sdk_cloudwatchlogs::operation::describe_log_groups::builders::DescribeLogGroupsInputBuilder;
 use chrono::{DateTime, Days, Local, NaiveTime};
 use clap::{parser::ValueSource, ArgMatches};
 use cloudwatchlogs::operation::{
@@ -18,6 +20,7 @@ use regex::Regex;
 use toml_edit::DocumentMut;
 
 pub async fn print(
+    aws_config: &aws_config::SdkConfig,
     client: &cloudwatchlogs::Client,
     args: &LogArgs,
     arg_matches: &ArgMatches,
@@ -32,32 +35,10 @@ pub async fn print(
         &args.datetime_format
     };
 
-    let unix_now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .context("cannot get unix time as duration")?;
-    let start = parse_offset_or_duration(&args.start, &unix_now)?;
-    // TODO: add check for end and length at the same time
-    let end = if let Some(end) = &args.end {
-        parse_offset_or_duration(end, &unix_now)?
-    } else if let Some(length) = &args.length {
-        start
-            + duration_str::parse(length)
-                .with_context(|| format!("cannot parse `{length}` as duration"))?
-                .as_millis() as i64
-    } else {
-        unix_now.as_millis() as i64
-    };
-
     let message_regexp = args
         .message_regexp
         .as_ref()
         .map(|v| RegexWithReplace::new(v.as_str()).unwrap());
-
-    debug!(
-        "query\n from: {start} {}\n to:   {end} {}",
-        local_time(start),
-        local_time(end)
-    );
 
     #[cfg(feature = "ui")]
     let mut lines = vec![];
@@ -83,6 +64,38 @@ pub async fn print(
         print_event(&t, &m, datetime_format)
     };
 
+    if args.tail {
+        if args.ui {
+            anyhow::bail!("UI doesn't work with tail");
+        }
+        if args.end.is_some() || args.length.is_some() {
+            anyhow::bail!("tail doesn't support end nor length parameters")
+        }
+        return tail(aws_config, client, args, &mut consumer).await;
+    }
+
+    let unix_now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .context("cannot get unix time as duration")?;
+    let start = parse_offset_or_duration(&args.start, &unix_now)?;
+    // TODO: add check for end and length at the same time
+    let end = if let Some(end) = &args.end {
+        parse_offset_or_duration(end, &unix_now)?
+    } else if let Some(length) = &args.length {
+        start
+            + duration_str::parse(length)
+                .with_context(|| format!("cannot parse `{length}` as duration"))?
+                .as_millis() as i64
+    } else {
+        unix_now.as_millis() as i64
+    };
+
+    debug!(
+        "query\n from: {start} {}\n to:   {end} {}",
+        local_time(start),
+        local_time(end)
+    );
+
     if let Some(filter) = &args.filter {
         print_filter_events(client, args, start, end, filter, &mut consumer).await
     } else {
@@ -96,6 +109,41 @@ pub async fn print(
         Ok(())
     }
     #[cfg(not(feature = "ui"))]
+    Ok(())
+}
+
+async fn tail(
+    aws_config: &aws_config::SdkConfig,
+    client: &aws_sdk_cloudwatchlogs::Client,
+    args: &LogArgs,
+    consumer: &mut impl FnMut(Option<i64>, Option<String>),
+) -> Result<()> {
+    let descriptions = DescribeLogGroupsInputBuilder::default()
+        .set_log_group_name_prefix(Some(args.group.clone()))
+        .limit(1)
+        .send_with(client)
+        .await?;
+    let arn = descriptions
+        .log_groups
+        .as_ref()
+        .and_then(|gs| gs.first())
+        .and_then(|g| g.arn())
+        .ok_or_else(|| {
+            anyhow::anyhow!("Failed to get arn, DescribeLogGroup response: {descriptions:?}")
+        })?;
+    live_tail_client::request_and_process(
+        &aws_config
+            .credentials_provider()
+            .unwrap()
+            .provide_credentials()
+            .await?,
+        aws_config.region().expect("region is provided").as_ref(),
+        arn.trim_end_matches("*"),
+        &args.stream,
+        args.filter.as_deref(),
+        consumer,
+    )
+    .await?;
     Ok(())
 }
 

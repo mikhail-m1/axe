@@ -5,7 +5,8 @@ Axe is another tool to get logs from AWS CloudWatch.
 
 * multiple ways to define datetime range,
 * build-in regex support,
-* command alias support.
+* command alias support,
+* live tail support.
 
 ## Installation
 
@@ -47,6 +48,8 @@ Arguments:
   <STREAM>  stream name
 
 Options:
+  -t, --tail
+          prints live log. Start, end, length and ui options are not supported
   -s, --start <START>
           start time, the time can be defines as
           * RFC 3339, ex:

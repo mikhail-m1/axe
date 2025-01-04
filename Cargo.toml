@@ -2,7 +2,7 @@
 name = "cw-axe"
 authors = ["Mikhail Modin <mikhailm1@gmail.com>"]
 description = "AWS CloudWatch CLI log viewer"
-version = "0.2.1"
+version = "0.3.0"
 homepage = "https://github.com/mikhail-m1/axe"
 repository = "https://github.com/mikhail-m1/axe"
 license = "GPL-3.0"
@@ -32,7 +32,20 @@ eframe = { version = "0.27.0", default-features = false, optional = true, featur
     "glow",
 ] }
 
-aws-sdk-cloudwatchlogs = "1.23"
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+aws-sdk-cloudwatchlogs = "1.63"
+aws-config = { version = "1.5", features = ["behavior-version-latest"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1.5"
+
+# live tail
+aws-credential-types = "1.2"
+bytes = "1.9"
+futures-util = "0.3"
+futures-core = "0.3"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+hmac = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+reqwest = { version = "0.12.10", features = ["stream"] }
+thiserror = "2.0"
