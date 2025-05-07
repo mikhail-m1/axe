@@ -31,7 +31,7 @@ pub async fn request_and_process(
     group_arn: &str,
     stream: &str,
     filter: Option<&str>,
-    mut consumer: impl FnMut(Option<i64>, Option<String>),
+    mut consumer: impl FnMut(Option<i64>, Option<String>) -> bool,
 ) -> Result<(), Error> {
     let body = serde_json::to_string(&LiveTailRequest {
         log_event_filter_pattern: filter.unwrap_or_default().to_string(),
@@ -148,7 +148,9 @@ x-amz-target:Logs_20140328.StartLiveTail
     futures_util::pin_mut!(parser);
     while let Some(event) = parser.next().await {
         let message = event.map_err(Error::Parser)?;
-        consumer(Some(message.ingestion_time as i64), Some(message.message));
+        if !(consumer(Some(message.ingestion_time as i64), Some(message.message))) {
+            break;
+        }
     }
     Ok(())
 }

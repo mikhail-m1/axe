@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 #[cfg(feature = "ui")]
@@ -56,7 +57,8 @@ pub async fn print(
             lines.push((
                 format!("{}", local_time(t.unwrap_or(0)).format(datetime_format)),
                 m,
-            ))
+            ));
+            true
         } else {
             print_event(&t, &m, datetime_format)
         }
@@ -116,7 +118,7 @@ async fn tail(
     aws_config: &aws_config::SdkConfig,
     client: &aws_sdk_cloudwatchlogs::Client,
     args: &LogArgs,
-    consumer: &mut impl FnMut(Option<i64>, Option<String>),
+    consumer: &mut impl FnMut(Option<i64>, Option<String>) -> bool,
 ) -> Result<()> {
     let descriptions = DescribeLogGroupsInputBuilder::default()
         .set_log_group_name_prefix(Some(args.group.clone()))
@@ -155,7 +157,7 @@ async fn print_all_events<ConsumerFn>(
     consumer: &mut ConsumerFn,
 ) -> Result<()>
 where
-    ConsumerFn: FnMut(Option<i64>, Option<String>),
+    ConsumerFn: FnMut(Option<i64>, Option<String>) -> bool,
 {
     let template = GetLogEventsInputBuilder::default()
         .log_group_name(&args.group)
@@ -166,14 +168,16 @@ where
         .end_time(end);
 
     let mut opt_res = Some(template.clone().send_with(client).await);
-    while let Some(res) = opt_res {
+    'main: while let Some(res) = opt_res {
         let output = res.context("get log events failed")?;
         if let Some(events) = output.events {
             if events.is_empty() {
                 break;
             }
             for event in events.into_iter() {
-                consumer(event.timestamp, event.message);
+                if !consumer(event.timestamp, event.message) {
+                    break 'main;
+                }
             }
         } else {
             break;
@@ -196,7 +200,7 @@ async fn print_filter_events<ConsumerFn>(
     consumer: &mut ConsumerFn,
 ) -> Result<()>
 where
-    ConsumerFn: FnMut(Option<i64>, Option<String>),
+    ConsumerFn: FnMut(Option<i64>, Option<String>) -> bool,
 {
     let template = FilterLogEventsInputBuilder::default()
         .log_group_name(&args.group)
@@ -214,7 +218,9 @@ where
                 break;
             }
             for event in events.into_iter() {
-                consumer(event.timestamp, event.message);
+                if !consumer(event.timestamp, event.message) {
+                    break;
+                }
             }
         } else {
             break;
@@ -228,9 +234,17 @@ where
     Ok(())
 }
 
-fn print_event(timestamp: &Option<i64>, message: &str, datetime_format: &str) {
+fn print_event(timestamp: &Option<i64>, message: &str, datetime_format: &str) -> bool {
     let datetime = local_time(timestamp.unwrap_or(0)).format(datetime_format);
-    println!("{datetime}|{}", message)
+    let mut lock = std::io::stdout().lock();
+    let result = writeln!(lock, "{datetime}|{}", message);
+    match result {
+        Ok(()) => true,
+        Err(e) => {
+            eprint!("Cannot write to stdout: {e}");
+            false
+        }
+    }
 }
 
 fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {

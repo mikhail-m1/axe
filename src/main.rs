@@ -183,7 +183,7 @@ fn read_config(args: &Cli, fail_on_not_found: bool) -> Result<toml_edit::Documen
 async fn create_client(
     profile: &Option<String>,
 ) -> (aws_config::SdkConfig, cloudwatchlogs::Client) {
-    let loader = aws_config::defaults(aws_config::BehaviorVersion::v2024_03_28())
+    let loader = aws_config::defaults(aws_config::BehaviorVersion::v2025_01_17())
         .app_name(aws_config::AppName::new("aws-axe").expect("name is valid"));
 
     let loader = if let Some(profile) = profile.as_ref() {
