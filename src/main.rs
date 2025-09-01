@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use clap::{parser::ValueSource, Args, Parser, Subcommand};
 use itertools::Itertools;
+use time_arg::SimpleTime;
 
 mod groups;
 mod live_tail_client;
@@ -238,7 +239,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// show logs
-    #[command(alias="logs")]
+    #[command(alias = "logs")]
     Log(LogArgs),
     /// show log groups
     Groups {
@@ -277,8 +278,8 @@ enum Commands {
         /// * Unix epoch time in seconds or milliseconds, ex:
         ///     * 1700000000
         ///     * 1700000000000
-        #[arg(short, long)]
-        start: Option<String>,
+        #[arg(short, long, verbatim_doc_comment)]
+        start: Option<SimpleTime>,
     },
     /// add or rewrite alias, use with with -- after alias to pass args
     Alias {
@@ -323,11 +324,11 @@ struct LogArgs {
     /// * Unix epoch time in seconds or milliseconds, ex:
     ///     * 1700000000
     ///     * 1700000000000
-    #[arg(short, long, verbatim_doc_comment, default_value_os_t = String::from("60m"))]
-    start: String,
+    #[arg(short, long, verbatim_doc_comment, default_value = "60m")]
+    start: SimpleTime,
     /// end time, format is the same as for start
     #[arg(short, long, default_value = None)]
-    end: Option<String>,
+    end: Option<SimpleTime>,
     /// either length or end is used, the format is same as offset for start
     #[arg(short, long, default_value = None)]
     length: Option<String>,

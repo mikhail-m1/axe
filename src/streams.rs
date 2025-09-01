@@ -1,7 +1,4 @@
-use crate::{
-    time_arg::{parse_offset_or_duration, unix_now},
-    utils::format_opt_unix_ms,
-};
+use crate::{time_arg::SimpleTime, utils::format_opt_unix_ms};
 
 use super::utils::OptFuture;
 use anyhow::{Context, Result};
@@ -16,7 +13,7 @@ pub async fn print(
     prefix: Option<String>,
     verbose: bool,
     tab: bool,
-    start: Option<String>,
+    start: Option<SimpleTime>,
 ) -> Result<()> {
     let mut streams: Vec<LogStream> = vec![];
 
@@ -30,11 +27,7 @@ pub async fn print(
         template = template.order_by(OrderBy::LogStreamName).descending(false);
     }
 
-    let start_timestamp = if let Some(start) = &start {
-        parse_offset_or_duration(start, &unix_now()?)?
-    } else {
-        0
-    };
+    let start_timestamp = start.map(|s| s.timestamp_seconds()).unwrap_or(0);
 
     let mut opt_res = Some(template.clone().send_with(client).await);
     'outer: while let Some(res) = opt_res {

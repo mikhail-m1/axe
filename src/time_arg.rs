@@ -1,12 +1,31 @@
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Days, Local, NaiveTime};
+use chrono::{DateTime, Days, Local, NaiveDate, NaiveTime};
 
 pub fn unix_now() -> Result<Duration> {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .context("cannot get unix time as duration")
+}
+
+/// Wrapper around absolute time as an integral number of seconds since the epoch
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) struct SimpleTime(i64);
+
+impl SimpleTime {
+    pub fn timestamp_seconds(&self) -> i64 {
+        self.0
+    }
+}
+
+impl std::str::FromStr for SimpleTime {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let now = unix_now()?;
+        parse_offset_or_duration(value, &now).map(|v| SimpleTime(v))
+    }
 }
 
 pub fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
@@ -56,6 +75,16 @@ pub fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64>
                 })
         })
         .or_else(|_| DateTime::parse_from_rfc3339(value).map(|d| d.timestamp_millis()))
+        .or_else(|_| {
+            let date = NaiveDate::parse_from_str(value, "%Y-%m-%d")?;
+            let midnight = NaiveTime::MIN;
+            let dt = date
+                .and_time(midnight)
+                .and_local_timezone(Local)
+                .earliest()
+                .ok_or(anyhow::anyhow!("ambiguous time"))?;
+            Ok::<i64, anyhow::Error>(dt.timestamp_millis())
+        })
         .with_context(|| {
             format!("failed to parse `{value}` as duration, time, UTC time or RFC3339")
         })

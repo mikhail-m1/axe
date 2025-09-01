@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::time_arg::{parse_offset_or_duration, unix_now};
+use crate::time_arg::unix_now;
 #[cfg(feature = "ui")]
 use crate::ui;
 use crate::utils::{local_time, OptFuture};
@@ -75,18 +75,17 @@ pub async fn print(
         return tail(aws_config, client, args, &mut consumer).await;
     }
 
-    let now = unix_now()?;
-    let start = parse_offset_or_duration(&args.start, &now)?;
+    let start = args.start.timestamp_seconds();
     // TODO: add check for end and length at the same time
     let end = if let Some(end) = &args.end {
-        parse_offset_or_duration(end, &now)?
+        end.timestamp_seconds()
     } else if let Some(length) = &args.length {
         start
             + duration_str::parse(length)
                 .with_context(|| format!("cannot parse `{length}` as duration"))?
                 .as_millis() as i64
     } else {
-        now.as_millis() as i64
+        unix_now()?.as_millis() as i64
     };
 
     debug!(
