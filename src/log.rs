@@ -1,6 +1,5 @@
 use std::io::Write;
 
-use crate::time_arg::{parse_offset_or_duration, unix_now};
 #[cfg(feature = "ui")]
 use crate::ui;
 use crate::utils::{local_time, OptFuture};
@@ -10,6 +9,7 @@ use anyhow::{Context, Result};
 use aws_credential_types::provider::ProvideCredentials;
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_cloudwatchlogs::operation::describe_log_groups::builders::DescribeLogGroupsInputBuilder;
+use chrono::{DateTime, Local, Utc};
 use clap::{parser::ValueSource, ArgMatches};
 use cloudwatchlogs::operation::{
     filter_log_events::builders::FilterLogEventsInputBuilder,
@@ -18,6 +18,14 @@ use cloudwatchlogs::operation::{
 use log::debug;
 use regex::Regex;
 use toml_edit::DocumentMut;
+
+fn format_opt_local_time(opt_time: &Option<DateTime<Utc>>, fmt: &str) -> String {
+    if let Some(time) = opt_time.as_ref() {
+        time.with_timezone(&Local).format(fmt).to_string()
+    } else {
+        String::from("(unknown time)")
+    }
+}
 
 pub async fn print(
     aws_config: &aws_config::SdkConfig,
@@ -42,7 +50,7 @@ pub async fn print(
 
     #[cfg(feature = "ui")]
     let mut lines = vec![];
-    let mut consumer = |t: Option<i64>, m: Option<String>| {
+    let mut consumer = |t: Option<DateTime<Utc>>, m: Option<String>| {
         let m = if let Some(re) = &message_regexp {
             re.re
                 .replace(&m.unwrap_or_default(), re.replacement)
@@ -53,10 +61,7 @@ pub async fn print(
 
         #[cfg(feature = "ui")]
         if args.ui {
-            lines.push((
-                format!("{}", local_time(t.unwrap_or(0)).format(datetime_format)),
-                m,
-            ));
+            lines.push((format_opt_local_time(&t, datetime_format), m));
             true
         } else {
             print_event(&t, &m, datetime_format)
@@ -75,18 +80,16 @@ pub async fn print(
         return tail(aws_config, client, args, &mut consumer).await;
     }
 
-    let now = unix_now()?;
-    let start = parse_offset_or_duration(&args.start, &now)?;
+    let start = args.start;
     // TODO: add check for end and length at the same time
     let end = if let Some(end) = &args.end {
-        parse_offset_or_duration(end, &now)?
+        *end
     } else if let Some(length) = &args.length {
         start
             + duration_str::parse(length)
                 .with_context(|| format!("cannot parse `{length}` as duration"))?
-                .as_millis() as i64
     } else {
-        now.as_millis() as i64
+        Utc::now()
     };
 
     debug!(
@@ -115,7 +118,7 @@ async fn tail(
     aws_config: &aws_config::SdkConfig,
     client: &aws_sdk_cloudwatchlogs::Client,
     args: &LogArgs,
-    consumer: &mut impl FnMut(Option<i64>, Option<String>) -> bool,
+    consumer: &mut impl FnMut(Option<DateTime<Utc>>, Option<String>) -> bool,
 ) -> Result<()> {
     let descriptions = DescribeLogGroupsInputBuilder::default()
         .set_log_group_name_prefix(Some(args.group.clone()))
@@ -149,12 +152,12 @@ async fn tail(
 async fn print_all_events<ConsumerFn>(
     client: &cloudwatchlogs::Client,
     args: &LogArgs,
-    start: i64,
-    end: i64,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
     consumer: &mut ConsumerFn,
 ) -> Result<()>
 where
-    ConsumerFn: FnMut(Option<i64>, Option<String>) -> bool,
+    ConsumerFn: FnMut(Option<DateTime<Utc>>, Option<String>) -> bool,
 {
     let template = GetLogEventsInputBuilder::default()
         .log_group_name(&args.group)
@@ -162,8 +165,8 @@ where
         .log_stream_name(args.stream.as_ref().unwrap())
         .limit(args.chunk_size as i32)
         .start_from_head(true)
-        .start_time(start)
-        .end_time(end);
+        .start_time(start.timestamp_millis())
+        .end_time(end.timestamp_millis());
 
     let mut opt_res = Some(template.clone().send_with(client).await);
     'main: while let Some(res) = opt_res {
@@ -173,7 +176,12 @@ where
                 break;
             }
             for event in events.into_iter() {
-                if !consumer(event.timestamp, event.message) {
+                if !consumer(
+                    event
+                        .timestamp
+                        .and_then(DateTime::<Utc>::from_timestamp_millis),
+                    event.message,
+                ) {
                     break 'main;
                 }
             }
@@ -192,21 +200,21 @@ where
 async fn print_filter_events<ConsumerFn>(
     client: &cloudwatchlogs::Client,
     args: &LogArgs,
-    start: i64,
-    end: i64,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
     filter: &str,
     consumer: &mut ConsumerFn,
 ) -> Result<()>
 where
-    ConsumerFn: FnMut(Option<i64>, Option<String>) -> bool,
+    ConsumerFn: FnMut(Option<DateTime<Utc>>, Option<String>) -> bool,
 {
     let template = FilterLogEventsInputBuilder::default()
         .log_group_name(&args.group)
         // clap ensures that this option is present unless --tail is passed
         .log_stream_names(args.stream.as_deref().unwrap())
         .limit(args.chunk_size as i32)
-        .start_time(start)
-        .end_time(end)
+        .start_time(start.timestamp_millis())
+        .end_time(end.timestamp_millis())
         .filter_pattern(filter);
 
     let mut opt_res = Some(template.clone().send_with(client).await);
@@ -217,7 +225,10 @@ where
                 break;
             }
             for event in events.into_iter() {
-                if !consumer(event.timestamp, event.message) {
+                let timestamp = event
+                    .timestamp
+                    .and_then(DateTime::<Utc>::from_timestamp_millis);
+                if !consumer(timestamp, event.message) {
                     break;
                 }
             }
@@ -233,8 +244,8 @@ where
     Ok(())
 }
 
-fn print_event(timestamp: &Option<i64>, message: &str, datetime_format: &str) -> bool {
-    let datetime = local_time(timestamp.unwrap_or(0)).format(datetime_format);
+fn print_event(timestamp: &Option<DateTime<Utc>>, message: &str, datetime_format: &str) -> bool {
+    let datetime = format_opt_local_time(timestamp, datetime_format);
     let mut lock = std::io::stdout().lock();
     let result = writeln!(lock, "{datetime}|{}", message);
     match result {

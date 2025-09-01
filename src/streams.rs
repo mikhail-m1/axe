@@ -1,11 +1,9 @@
-use crate::{
-    time_arg::{parse_offset_or_duration, unix_now},
-    utils::format_opt_unix_ms,
-};
+use crate::utils::format_opt_unix_ms;
 
 use super::utils::OptFuture;
 use anyhow::{Context, Result};
 use aws_sdk_cloudwatchlogs::{self as cloudwatchlogs, types::OrderBy};
+use chrono::{DateTime, Utc};
 use cloudwatchlogs::{
     operation::describe_log_streams::builders::DescribeLogStreamsInputBuilder, types::LogStream,
 };
@@ -16,7 +14,7 @@ pub async fn print(
     prefix: Option<String>,
     verbose: bool,
     tab: bool,
-    start: Option<String>,
+    start: Option<DateTime<Utc>>,
 ) -> Result<()> {
     let mut streams: Vec<LogStream> = vec![];
 
@@ -30,11 +28,7 @@ pub async fn print(
         template = template.order_by(OrderBy::LogStreamName).descending(false);
     }
 
-    let start_timestamp = if let Some(start) = &start {
-        parse_offset_or_duration(start, &unix_now()?)?
-    } else {
-        0
-    };
+    let start_timestamp = start.map(|s| s.timestamp_millis()).unwrap_or(0);
 
     let mut opt_res = Some(template.clone().send_with(client).await);
     'outer: while let Some(res) = opt_res {
