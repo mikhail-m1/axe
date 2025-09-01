@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use futures_util::StreamExt;
 use hmac::digest::InvalidLength;
 use log::debug;
@@ -31,7 +32,7 @@ pub async fn request_and_process(
     group_arn: &str,
     stream: Option<&str>,
     filter: Option<&str>,
-    mut consumer: impl FnMut(Option<i64>, Option<String>) -> bool,
+    mut consumer: impl FnMut(Option<DateTime<Utc>>, Option<String>) -> bool,
 ) -> Result<(), Error> {
     let log_stream_names = if let Some(stream) = stream {
         vec![stream.to_string()]
@@ -44,7 +45,7 @@ pub async fn request_and_process(
         log_stream_names,
     })
     .map_err(Error::Serialize)?;
-    let now = chrono::Utc::now();
+    let now = Utc::now();
     let date = now.format("%Y%m%d").to_string();
     let now_string = now.format("%Y%m%dT%H%M%SZ").to_string();
     let secret = format!("AWS4{}", credentials.secret_access_key());
@@ -153,7 +154,8 @@ x-amz-target:Logs_20140328.StartLiveTail
     futures_util::pin_mut!(parser);
     while let Some(event) = parser.next().await {
         let message = event.map_err(Error::Parser)?;
-        if !(consumer(Some(message.ingestion_time as i64), Some(message.message))) {
+        let timestamp = DateTime::<Utc>::from_timestamp_millis(message.ingestion_time as i64);
+        if !(consumer(timestamp, Some(message.message))) {
             break;
         }
     }
