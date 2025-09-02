@@ -214,6 +214,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// show logs
+    #[command(alias="logs")]
     Log(LogArgs),
     /// show log groups
     Groups {
