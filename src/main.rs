@@ -33,7 +33,10 @@ async fn main() -> Result<()> {
 
     loop {
         let Cli {
-            profile, command, ..
+            profile,
+            region,
+            command,
+            ..
         } = args;
         match command {
             Commands::Groups {
@@ -41,8 +44,13 @@ async fn main() -> Result<()> {
                 pattern,
                 streams,
             } => {
-                return groups::print(&create_client(&profile).await.1, pattern, streams, verbose)
-                    .await;
+                return groups::print(
+                    &create_client(&profile, &region).await.1,
+                    pattern,
+                    streams,
+                    verbose,
+                )
+                .await;
             }
             Commands::Streams {
                 group,
@@ -50,7 +58,7 @@ async fn main() -> Result<()> {
                 prefix,
             } => {
                 return streams::print(
-                    &create_client(&profile).await.1,
+                    &create_client(&profile, &region).await.1,
                     group,
                     prefix,
                     verbose,
@@ -59,7 +67,7 @@ async fn main() -> Result<()> {
                 .await;
             }
             Commands::Log(ref log_args) => {
-                let (aws_config, client) = &create_client(&profile).await;
+                let (aws_config, client) = &create_client(&profile, &region).await;
                 return log::print(
                     aws_config,
                     client,
@@ -182,6 +190,7 @@ fn read_config(args: &Cli, fail_on_not_found: bool) -> Result<toml_edit::Documen
 
 async fn create_client(
     profile: &Option<String>,
+    region: &Option<String>,
 ) -> (aws_config::SdkConfig, cloudwatchlogs::Client) {
     let loader = aws_config::defaults(aws_config::BehaviorVersion::v2025_01_17())
         .app_name(aws_config::AppName::new("aws-axe").expect("name is valid"));
@@ -192,9 +201,16 @@ async fn create_client(
         loader
     };
 
+    let loader = if let Some(region) = region.as_ref() {
+        let region = aws_config::Region::new(region.clone());
+        loader.region(region)
+    } else {
+        loader
+    };
+
     let config = loader.load().await;
-    let cleint = aws_sdk_cloudwatchlogs::Client::new(&config);
-    (config, cleint)
+    let client = aws_sdk_cloudwatchlogs::Client::new(&config);
+    (config, client)
 }
 
 #[derive(Parser, Debug)]
@@ -203,6 +219,11 @@ struct Cli {
     /// AWS profile name
     #[arg(short, long)]
     profile: Option<String>,
+
+    /// AWS region (overriding profile)
+    #[arg(short, long)]
+    region: Option<String>,
+
     /// config
     #[arg(short, long, default_value_os_t = PathBuf::from("~/.config/axe/axe.toml"))]
     config_path: PathBuf,
