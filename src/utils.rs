@@ -30,6 +30,6 @@ pub fn local_time(unix_time_ms: i64) -> DateTime<Local> {
 pub fn format_opt_unix_ms(opt_unix_time_ms: Option<i64>) -> String {
     opt_unix_time_ms
         .map(local_time)
-        .map(|d| d.to_string())
+        .map(|d| d.to_rfc3339())
         .unwrap_or_default()
 }
