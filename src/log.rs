@@ -141,7 +141,7 @@ async fn tail(
             .await?,
         aws_config.region().expect("region is provided").as_ref(),
         arn.trim_end_matches("*"),
-        &args.stream,
+        args.stream.as_deref(),
         args.filter.as_deref(),
         consumer,
     )
@@ -161,7 +161,8 @@ where
 {
     let template = GetLogEventsInputBuilder::default()
         .log_group_name(&args.group)
-        .log_stream_name(&args.stream)
+        // clap ensures that this option is present unless --tail is passed
+        .log_stream_name(args.stream.as_ref().unwrap())
         .limit(args.chunk_size as i32)
         .start_from_head(true)
         .start_time(start)
@@ -204,7 +205,8 @@ where
 {
     let template = FilterLogEventsInputBuilder::default()
         .log_group_name(&args.group)
-        .log_stream_names(&args.stream)
+        // clap ensures that this option is present unless --tail is passed
+        .log_stream_names(args.stream.as_deref().unwrap())
         .limit(args.chunk_size as i32)
         .start_time(start)
         .end_time(end)
