@@ -282,8 +282,9 @@ enum Commands {
 struct LogArgs {
     /// group name
     group: String,
-    /// stream name
-    stream: String,
+    /// stream name. If not passed, will merge all streams in the Group.
+    #[arg(required_unless_present = "tail")]
+    stream: Option<String>,
     /// prints live log. Start, end, length and ui options are not supported.
     #[arg(short, long, default_value_t = false)]
     tail: bool,
