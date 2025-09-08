@@ -1,6 +1,6 @@
 use std::io::Write;
-use std::time::{Duration, SystemTime};
 
+use crate::time_arg::{parse_offset_or_duration, unix_now};
 #[cfg(feature = "ui")]
 use crate::ui;
 use crate::utils::{local_time, OptFuture};
@@ -10,7 +10,6 @@ use anyhow::{Context, Result};
 use aws_credential_types::provider::ProvideCredentials;
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_cloudwatchlogs::operation::describe_log_groups::builders::DescribeLogGroupsInputBuilder;
-use chrono::{DateTime, Days, Local, NaiveTime};
 use clap::{parser::ValueSource, ArgMatches};
 use cloudwatchlogs::operation::{
     filter_log_events::builders::FilterLogEventsInputBuilder,
@@ -76,20 +75,18 @@ pub async fn print(
         return tail(aws_config, client, args, &mut consumer).await;
     }
 
-    let unix_now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .context("cannot get unix time as duration")?;
-    let start = parse_offset_or_duration(&args.start, &unix_now)?;
+    let now = unix_now()?;
+    let start = parse_offset_or_duration(&args.start, &now)?;
     // TODO: add check for end and length at the same time
     let end = if let Some(end) = &args.end {
-        parse_offset_or_duration(end, &unix_now)?
+        parse_offset_or_duration(end, &now)?
     } else if let Some(length) = &args.length {
         start
             + duration_str::parse(length)
                 .with_context(|| format!("cannot parse `{length}` as duration"))?
                 .as_millis() as i64
     } else {
-        unix_now.as_millis() as i64
+        now.as_millis() as i64
     };
 
     debug!(
@@ -247,68 +244,6 @@ fn print_event(timestamp: &Option<i64>, message: &str, datetime_format: &str) ->
     }
 }
 
-fn parse_offset_or_duration(value: &str, unix_now: &Duration) -> Result<i64> {
-    parse_as_epoch_ms(value)
-        .or_else(|_| {
-            duration_str::parse(value).map(|o| unix_now.saturating_sub(o).as_millis() as i64)
-        })
-        .or_else(|_| {
-            NaiveTime::parse_from_str(value, "%H:%M")
-                .or_else(|_| NaiveTime::parse_from_str(value, "%H:%M:%S"))
-                .or_else(|_| NaiveTime::parse_from_str(value, "%H:%M:%S.%3f"))
-                .map_err(|_| 0)
-                .and_then(|n| {
-                    DateTime::from_timestamp_millis(unix_now.as_millis() as i64)
-                        .unwrap()
-                        .with_timezone(&Local)
-                        .with_time(n)
-                        .single()
-                        .map(|v| {
-                            if v.timestamp_millis() > (unix_now.as_millis() as i64) {
-                                v.checked_sub_days(Days::new(1)).unwrap().timestamp_millis()
-                            } else {
-                                v.timestamp_millis()
-                            }
-                        })
-                        .ok_or(0)
-                })
-        })
-        .or_else(|_| {
-            NaiveTime::parse_from_str(value, "%H:%MZ")
-                .or_else(|_| NaiveTime::parse_from_str(value, "%H:%M:%SZ"))
-                .or_else(|_| NaiveTime::parse_from_str(value, "%H:%M:%S.%3fZ"))
-                .map_err(|_| 0)
-                .and_then(|n| {
-                    DateTime::from_timestamp_millis(unix_now.as_millis() as i64)
-                        .unwrap()
-                        .with_time(n)
-                        .single()
-                        .map(|v| {
-                            if v.timestamp_millis() > (unix_now.as_millis() as i64) {
-                                v.checked_sub_days(Days::new(1)).unwrap().timestamp_millis()
-                            } else {
-                                v.timestamp_millis()
-                            }
-                        })
-                        .ok_or(0)
-                })
-        })
-        .or_else(|_| DateTime::parse_from_rfc3339(value).map(|d| d.timestamp_millis()))
-        .with_context(|| {
-            format!("failed to parse `{value}` as duration, time, UTC time or RFC3339")
-        })
-}
-
-fn parse_as_epoch_ms(candidate: &str) -> anyhow::Result<i64> {
-    let ms = candidate.parse::<i64>()?;
-    if ms > 946684800000 {
-        // 2000-01-01 in ms
-        Ok(ms)
-    } else {
-        Ok(ms * 1000)
-    }
-}
-
 struct RegexWithReplace<'a> {
     re: Regex,
     replacement: &'a str,
@@ -326,33 +261,5 @@ impl<'a> RegexWithReplace<'a> {
             re: Regex::new(p.0).with_context(|| format!("failed to parse {} as regex", p.0))?,
             replacement: p.1,
         })
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn offset_or_duration() {
-        let ts = Duration::from_secs(
-            DateTime::parse_from_rfc3339("2024-01-02T03:04:05.678Z")
-                .unwrap()
-                .timestamp() as u64,
-        );
-        // TODO: write proper test, maybe change local time zone or just copy implementation logic
-        // TODO: cover other cases
-        assert!(parse_offset_or_duration("10:23", &ts).is_ok());
-        assert!(parse_offset_or_duration("10:23:45", &ts).is_ok());
-        assert!(parse_offset_or_duration("10:23:45.678", &ts).is_ok());
-
-        assert_eq!(
-            parse_offset_or_duration("1700000000", &ts).unwrap(),
-            1700000000000
-        );
-        assert_eq!(
-            parse_offset_or_duration("1700000000000", &ts).unwrap(),
-            1700000000000
-        );
     }
 }

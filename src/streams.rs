@@ -1,9 +1,14 @@
-use crate::utils::format_opt_unix_ms;
+use crate::{
+    time_arg::{parse_offset_or_duration, unix_now},
+    utils::format_opt_unix_ms,
+};
 
 use super::utils::OptFuture;
 use anyhow::{Context, Result};
-use aws_sdk_cloudwatchlogs as cloudwatchlogs;
-use cloudwatchlogs::operation::describe_log_streams::builders::DescribeLogStreamsInputBuilder;
+use aws_sdk_cloudwatchlogs::{self as cloudwatchlogs, types::OrderBy};
+use cloudwatchlogs::{
+    operation::describe_log_streams::builders::DescribeLogStreamsInputBuilder, types::LogStream,
+};
 
 pub async fn print(
     client: &cloudwatchlogs::Client,
@@ -11,17 +16,42 @@ pub async fn print(
     prefix: Option<String>,
     verbose: bool,
     tab: bool,
+    last_event_timestamp: Option<String>,
 ) -> Result<()> {
-    let mut streams = vec![];
+    let mut streams: Vec<LogStream> = vec![];
 
-    let template = DescribeLogStreamsInputBuilder::default()
+    let mut template = DescribeLogStreamsInputBuilder::default()
         .set_log_group_name(Some(group))
         .set_log_stream_name_prefix(prefix);
 
+    if last_event_timestamp.is_some() {
+        template = template.order_by(OrderBy::LastEventTime).descending(true)
+    } else {
+        template = template.order_by(OrderBy::LogStreamName).descending(false);
+    }
+
+    let last_event_timestamp_filter = if let Some(last_event_timestamp) = last_event_timestamp {
+        let now = unix_now()?;
+        Some(parse_offset_or_duration(&last_event_timestamp, &now)?)
+    } else {
+        None
+    };
+
     let mut opt_res = Some(template.clone().send_with(client).await);
-    while let Some(res) = opt_res {
-        let output = res.context("describe log streams call failed")?;
-        streams.append(&mut output.log_streams.unwrap());
+    'outer: while let Some(res) = opt_res {
+        let mut output = res.context("describe log streams call failed")?;
+        if let Some(ref mut output_streams) = output.log_streams {
+            for stream in output_streams.drain(..) {
+                if let Some(filter) = last_event_timestamp_filter.as_ref() {
+                    if let Some(timestamp) = stream.last_event_timestamp() {
+                        if timestamp < *filter {
+                            break 'outer;
+                        }
+                    }
+                }
+                streams.push(stream);
+            }
+        }
         opt_res = output
             .next_token
             .map(|t| template.clone().next_token(t).send_with(client))
