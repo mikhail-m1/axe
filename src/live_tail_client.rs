@@ -29,14 +29,19 @@ pub async fn request_and_process(
     credentials: &aws_credential_types::Credentials,
     region: &str,
     group_arn: &str,
-    stream: &str,
+    stream: Option<&str>,
     filter: Option<&str>,
     mut consumer: impl FnMut(Option<i64>, Option<String>) -> bool,
 ) -> Result<(), Error> {
+    let log_stream_names = if let Some(stream) = stream {
+        vec![stream.to_string()]
+    } else {
+        vec![]
+    };
     let body = serde_json::to_string(&LiveTailRequest {
         log_event_filter_pattern: filter.unwrap_or_default().to_string(),
         log_group_identifiers: vec![group_arn.to_string()],
-        log_stream_names: vec![stream.to_string()],
+        log_stream_names,
     })
     .map_err(Error::Serialize)?;
     let now = chrono::Utc::now();
@@ -175,5 +180,6 @@ fn sign_to_str(key: &[u8], content: &str) -> Result<String, Error> {
 struct LiveTailRequest {
     log_event_filter_pattern: String,
     log_group_identifiers: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     log_stream_names: Vec<String>,
 }
