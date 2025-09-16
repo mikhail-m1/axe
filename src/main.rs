@@ -17,6 +17,7 @@ mod live_tail_client;
 mod live_tail_parser;
 mod log;
 mod streams;
+mod time_arg;
 #[cfg(feature = "ui")]
 mod ui;
 mod utils;
@@ -56,6 +57,7 @@ async fn main() -> Result<()> {
                 group,
                 verbose,
                 prefix,
+                last_event_timestamp,
             } => {
                 return streams::print(
                     &create_client(&profile, &region).await.1,
@@ -63,6 +65,7 @@ async fn main() -> Result<()> {
                     prefix,
                     verbose,
                     false,
+                    last_event_timestamp,
                 )
                 .await;
             }
@@ -259,6 +262,23 @@ enum Commands {
         /// filter by prefix
         #[arg(short, long, default_value = None)]
         prefix: Option<String>,
+        /// filter by last_event_timestamp after this time, the time can be defined as
+        /// * RFC 3339, ex:
+        ///     * 2024-01-02T03:04:05.678Z
+        ///     * 2024-01-02T03:04:05+1
+        /// * offset from now, in days(d), hours(h), minutes(m), seconds(s) ex:
+        ///     * 10m - 10 minutes
+        ///     * 100 - 100 seconds
+        ///     * 1m30s
+        /// * local time of day, ex:
+        ///     * 12:34
+        /// * UTC time of day, ex:
+        ///     * 12:34Z
+        /// * Unix epoch time in seconds or milliseconds, ex:
+        ///     * 1700000000
+        ///     * 1700000000000
+        #[arg(short, long)]
+        last_event_timestamp: Option<String>,
     },
     /// add or rewrite alias, use with with -- after alias to pass args
     Alias {
@@ -288,7 +308,7 @@ struct LogArgs {
     /// prints live log. Start, end, length and ui options are not supported.
     #[arg(short, long, default_value_t = false)]
     tail: bool,
-    /// start time, the time can be defines as
+    /// start time, the time can be defined as
     /// * RFC 3339, ex:
     ///     * 2024-01-02T03:04:05.678Z
     ///     * 2024-01-02T03:04:05+1
@@ -303,7 +323,6 @@ struct LogArgs {
     /// * Unix epoch time in seconds or milliseconds, ex:
     ///     * 1700000000
     ///     * 1700000000000
-    /// *
     #[arg(short, long, verbatim_doc_comment, default_value_os_t = String::from("60m"))]
     start: String,
     /// end time, format is the same as for start

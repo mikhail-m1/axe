@@ -38,7 +38,7 @@ pub async fn print(
                 )
             }
             if streams {
-                streams::print(client, name, None, verbose, true).await?;
+                streams::print(client, name, None, verbose, true, None).await?;
             }
         }
         count += 1;
