@@ -16,7 +16,7 @@ pub async fn print(
     prefix: Option<String>,
     verbose: bool,
     tab: bool,
-    last_event_timestamp: Option<String>,
+    start: Option<String>,
 ) -> Result<()> {
     let mut streams: Vec<LogStream> = vec![];
 
@@ -24,17 +24,16 @@ pub async fn print(
         .set_log_group_name(Some(group))
         .set_log_stream_name_prefix(prefix);
 
-    if last_event_timestamp.is_some() {
+    if start.is_some() {
         template = template.order_by(OrderBy::LastEventTime).descending(true)
     } else {
         template = template.order_by(OrderBy::LogStreamName).descending(false);
     }
 
-    let last_event_timestamp_filter = if let Some(last_event_timestamp) = last_event_timestamp {
-        let now = unix_now()?;
-        Some(parse_offset_or_duration(&last_event_timestamp, &now)?)
+    let start_timestamp = if let Some(start) = &start {
+        parse_offset_or_duration(start, &unix_now()?)?
     } else {
-        None
+        0
     };
 
     let mut opt_res = Some(template.clone().send_with(client).await);
@@ -42,11 +41,9 @@ pub async fn print(
         let mut output = res.context("describe log streams call failed")?;
         if let Some(ref mut output_streams) = output.log_streams {
             for stream in output_streams.drain(..) {
-                if let Some(filter) = last_event_timestamp_filter.as_ref() {
-                    if let Some(timestamp) = stream.last_event_timestamp() {
-                        if timestamp < *filter {
-                            break 'outer;
-                        }
+                if let Some(timestamp) = stream.last_event_timestamp() {
+                    if timestamp < start_timestamp {
+                        break 'outer;
                     }
                 }
                 streams.push(stream);
