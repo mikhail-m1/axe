@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
                 group,
                 verbose,
                 prefix,
-                last_event_timestamp,
+                start,
             } => {
                 return streams::print(
                     &create_client(&profile, &region).await.1,
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
                     prefix,
                     verbose,
                     false,
-                    last_event_timestamp,
+                    start,
                 )
                 .await;
             }
@@ -262,7 +262,7 @@ enum Commands {
         /// filter by prefix
         #[arg(short, long, default_value = None)]
         prefix: Option<String>,
-        /// filter by last_event_timestamp after this time, the time can be defined as
+        /// show events after this time, the time can be defined as
         /// * RFC 3339, ex:
         ///     * 2024-01-02T03:04:05.678Z
         ///     * 2024-01-02T03:04:05+1
@@ -278,7 +278,7 @@ enum Commands {
         ///     * 1700000000
         ///     * 1700000000000
         #[arg(short, long)]
-        last_event_timestamp: Option<String>,
+        start: Option<String>,
     },
     /// add or rewrite alias, use with with -- after alias to pass args
     Alias {
